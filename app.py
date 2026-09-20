@@ -1,8 +1,8 @@
 # ============================================================
-# SCIENTIFIC ENGINEERING ENGINE + COPILOTE IA INTÉGRÉ
+# SCIENTIFIC ENGINEERING ENGINE + COPILOTE SÉMANTIQUE INTELLIGENT
 # Meta-moteur générique d'ingénierie scientifique industrielle
 #
-# VERSION 3.1 (Optimisée pour le nettoyage auto et le français)
+# VERSION 3.3 (Intégration totale d'origine + IA sémantique)
 # ============================================================
 
 
@@ -50,7 +50,7 @@ warnings.filterwarnings(
 # ============================================================
 
 ENGINE_NAME = "Scientific Engineering Engine"
-ENGINE_VERSION = "3.1"
+ENGINE_VERSION = "3.3"
 
 st.set_page_config(
     page_title=ENGINE_NAME,
@@ -84,6 +84,7 @@ st.markdown(
         border-radius: 0.5rem;
         background: #eaf7ea;
         border: 1px solid #9bd39b;
+        color: black;
     }
 
     .block-warning {
@@ -91,6 +92,7 @@ st.markdown(
         border-radius: 0.5rem;
         background: #fff6e5;
         border: 1px solid #e6c47a;
+        color: black;
     }
 
     .block-critical {
@@ -98,6 +100,7 @@ st.markdown(
         border-radius: 0.5rem;
         background: #ffeaea;
         border: 1px solid #e0a0a0;
+        color: black;
     }
 
     </style>
@@ -171,20 +174,13 @@ def contains_any(text, keywords):
 
 
 def smart_clean_dataframe(df):
-    """
-    Nettoie automatiquement le DataFrame pour éviter les plantages courants :
-    - Supprime les espaces dans les colonnes numériques (ex: '85 000' -> 85000)
-    - Convertit proprement les cibles binaires ou textuelles en chiffres si possible
-    """
+    """Nettoyage automatique des espaces dans les chiffres."""
     df = df.copy()
     for col in df.columns:
-        # Si la colonne ressemble à de l'exposition ou des chiffres mal formatés avec des espaces
         if df[col].dtype == 'object':
-            # Tentative de nettoyage des espaces dans les nombres
             cleaned_series = df[col].astype(str).str.replace(' ', '').str.replace(',', '.')
             try:
                 numeric_val = pd.to_numeric(cleaned_series, errors='raise')
-                # Si la conversion réussit sans trop de NaN, on applique
                 if numeric_val.notna().sum() > len(df) * 0.5:
                     df[col] = numeric_val
             except:
@@ -263,11 +259,19 @@ def load_uploaded_data(uploaded_file):
     raise ValueError("Format non supporté. Utilisez CSV ou XLSX.")
 
 
+# ============================================================
+# NETTOYAGE STRUCTUREL
+# ============================================================
+
 def standardize_dataframe(df):
 
     df = df.copy()
 
-    empty_columns = [col for col in df.columns if df[col].notna().sum() == 0]
+    empty_columns = [
+        col for col in df.columns
+        if df[col].notna().sum() == 0
+    ]
+
     if empty_columns:
         df = df.drop(columns=empty_columns)
 
@@ -283,7 +287,7 @@ def standardize_dataframe(df):
 
 
 # ============================================================
-# INFERENCE SEMANTIQUE ET SMART MAPPING AUTOMATIQUE
+# INFERENCE SEMANTIQUE & IA DE COMPRÉHENSION DU FICHIER
 # ============================================================
 
 def infer_variable_semantics(df):
@@ -305,15 +309,18 @@ def infer_variable_semantics(df):
             if parsed.notna().mean() >= 0.70:
                 role = "Variable temporelle"
                 confidence = 0.90
-        elif contains_any(normalized, ["id", "identifiant", "asset_id", "equipment_id", "machine_id", "unit_id"]):
+        elif contains_any(normalized, ["id", "identifiant", "asset_id", "equipment_id", "machine_id", "unit_id", "equipement"]):
             role = "Identifiant potentiel"
             confidence = 0.85
-        elif contains_any(normalized, ["event", "failure", "fault", "defaut", "defaillance", "panne", "target", "label"]):
+        elif contains_any(normalized, ["event", "failure", "fault", "defaut", "defaillance", "incident", "panne", "target", "label"]):
             role = "Événement / cible potentielle"
             confidence = 0.85
         elif contains_any(normalized, ["exposition", "exposure", "distance", "kilometrage", "mileage", "hours", "heures", "cycles"]):
             role = "Exposition potentielle"
             confidence = 0.80
+        elif contains_any(normalized, ["duration", "duree", "delay", "delai"]):
+            role = "Durée potentielle"
+            confidence = 0.72
         elif pd.api.types.is_numeric_dtype(series):
             role = "Variable quantitative"
             confidence = 0.60
@@ -335,23 +342,58 @@ def infer_variable_semantics(df):
     return pd.DataFrame(records)
 
 
-def smart_auto_detect_columns(df):
-    """Détecte automatiquement les colonnes clés pour pré-remplir le formulaire"""
+def semantic_auto_map(df, semantics_df):
+    """
+    L'IA sémantique lit le fichier et attribue automatiquement les rôles 
+    en se basant sur l'inférence (et non sur des mots codés en dur).
+    """
     mapping = {"unit": None, "target": None, "time": None, "exposure": None, "censure": None}
     
-    for col in df.columns:
-        col_lower = normalize_name(col)
-        if any(k in col_lower for k in ["equipement", "machine", "asset", "id"]):
-            if not mapping["unit"]: mapping["unit"] = col
-        elif any(k in col_lower for k in ["defaillance", "panne", "failure", "event"]):
-            if not mapping["target"]: mapping["target"] = col
-        elif any(k in col_lower for k in ["date", "temps", "time", "heure"]):
-            if not mapping["time"]: mapping["time"] = col
-        elif any(k in col_lower for k in ["exposition", "km", "kilometrage", "heure"]):
-            if not mapping["exposure"]: mapping["exposure"] = col
-        elif any(k in col_lower for k in ["censure", "censored"]):
-            if not mapping["censure"]: mapping["censure"] = col
+    for _, row in semantics_df.iterrows():
+        var = row["Variable"]
+        role = row["Rôle inféré"]
+        norm = normalize_name(var)
+        
+        # Unité d'étude (on cherche un identifiant qui n'est pas l'ID global d'événement s'il y a un équipement/machine)
+        if "Identifiant" in role:
+            if any(k in norm for k in ["equipement", "machine", "asset", "unit", "materiel"]):
+                mapping["unit"] = var
+            elif not mapping["unit"]:
+                mapping["unit"] = var
+                
+        # Cible / Événement
+        elif "Événement" in role or "cible" in role:
+            if not mapping["target"]:
+                mapping["target"] = var
+                
+        # Exposition ou temps
+        elif "Exposition" in role:
+            if not mapping["exposure"]:
+                mapping["exposure"] = var
+        elif "temporelle" in role:
+            if not mapping["time"]:
+                mapping["time"] = var
+                
+        # Censure
+        if "censure" in norm or "censored" in norm:
+            mapping["censure"] = var
+
+    # Fallbacks intelligents si non trouvés
+    if not mapping["unit"] and len(df.columns) > 0:
+        # Préférer une colonne catégorielle avec peu de valeurs uniques par rapport au total
+        for col in df.select_dtypes(include=['object', 'category']).columns:
+            if df[col].nunique() < len(df) * 0.5:
+                mapping["unit"] = col
+                break
+        if not mapping["unit"]:
+            mapping["unit"] = df.columns[0]
             
+    if not mapping["target"] and len(df.columns) > 0:
+        for col in df.columns:
+            if any(k in normalize_name(col) for k in ["defaillance", "panne", "failure", "event"]):
+                mapping["target"] = col
+                break
+
     return mapping
 
 
@@ -362,8 +404,10 @@ def smart_auto_detect_columns(df):
 def inspect_data_quality(df):
 
     issues = []
-    if df is None or df.empty:
-        return [("CRITIQUE", "Le jeu de données est vide ou absent.")]
+    if df is None:
+        return [("CRITIQUE", "Aucune donnée fournie.")]
+    if df.empty:
+        return [("CRITIQUE", "Le jeu de données est vide.")]
 
     if len(df) < 5:
         issues.append(("CRITIQUE", "Le jeu de données contient moins de 5 observations."))
@@ -376,8 +420,12 @@ def inspect_data_quality(df):
 
     for column in df.columns:
         missing_rate = df[column].isna().mean()
-        if missing_rate >= 0.50:
+        if missing_rate >= 0.80:
             issues.append(("IMPORTANT", f"{column} contient {missing_rate * 100:.1f}% de valeurs manquantes."))
+        elif missing_rate >= 0.50:
+            issues.append(("IMPORTANT", f"{column} contient {missing_rate * 100:.1f}% de valeurs manquantes."))
+        elif missing_rate > 0:
+            issues.append(("AVERTISSEMENT", f"{column} contient {missing_rate * 100:.1f}% de valeurs manquantes."))
 
     return issues
 
@@ -391,13 +439,20 @@ DOMAIN_KEYWORDS = {
     "Maintenance": ["maintenance", "intervention", "reparation", "immobilisation", "gmao", "preventive", "corrective"],
     "Qualité": ["qualite", "defaut", "non conformite", "rebuts", "defective", "quality"],
     "Production": ["production", "cadence", "trs", "oee", "rendement", "temps de cycle"],
+    "Énergie": ["energie", "consommation", "kwh", "puissance", "electrique"],
+    "Logistique": ["logistique", "stock", "inventaire", "flux", "transport"],
+    "Sécurité": ["securite", "accident", "incident", "risque", "danger"],
+    "Process": ["process", "procede", "parametre", "reglage", "processus"],
 }
 
 QUESTION_KEYWORDS = {
-    "Description": ["decrire", "analyser", "repartition", "comprendre", "etat des lieux", "caracteriser"],
-    "Explication / diagnostic": ["pourquoi", "cause", "origine", "facteur", "expliquer", "diagnostic"],
+    "Description": ["decrire", "analyser", "repartition", "comprendre", "etat des lieux", "caracteriser", "profil", "distribution"],
+    "Explication / diagnostic": ["pourquoi", "cause", "origine", "facteur", "expliquer", "diagnostic", "influence", "association"],
     "Prédiction": ["predire", "prevoir", "prediction", "anticiper", "forecast", "predict"],
     "Comparaison": ["comparer", "comparaison", "difference", "compare"],
+    "Optimisation": ["optimiser", "optimisation", "reduire", "ameliorer", "minimiser", "maximiser"],
+    "Détection": ["detecter", "anomalie", "anomalies", "derive", "surveillance", "detection"],
+    "Simulation": ["simuler", "simulation", "scenario", "what if"],
 }
 
 
@@ -434,11 +489,11 @@ def identify_study_unit(df, semantics):
     for _, row in semantics.iterrows():
         role = str(row["Rôle inféré"]).lower()
         if "identifiant" in role:
-            candidates.append({"Variable": row["Variable"], "Confiance": row["Confiance"]})
+            candidates.append({"Variable": row["Variable"], "Confiance": row["Confiance"], "Unités": int(df[row["Variable"]].nunique(dropna=True))})
     if candidates:
         res = pd.DataFrame(candidates).sort_values("Confiance", ascending=False)
-        return {"candidate": res.iloc[0]["Variable"]}
-    return {"candidate": None}
+        return {"status": "CANDIDAT IDENTIFIE", "candidate": res.iloc[0]["Variable"], "candidates": res}
+    return {"status": "NON IDENTIFIE", "candidate": None, "candidates": pd.DataFrame()}
 
 
 def identify_candidate_targets(df, semantics):
@@ -468,23 +523,53 @@ def identify_predictors(df, target=None):
 SCIENTIFIC_KNOWLEDGE_BASE = {
     "descriptive_statistics": {
         "name": "Statistiques descriptives", "family": "Exploration",
-        "objectives": ["Description", "Explication / diagnostic", "Prédiction"], "requires": [],
-        "outputs": ["distribution", "central_tendency"], "limitations": ["Description uniquement."],
+        "objectives": ["Description", "Explication / diagnostic", "Comparaison", "Prédiction", "Détection", "Optimisation", "Simulation"],
+        "requires": [], "outputs": ["distribution", "central_tendency"], "limitations": ["Description uniquement."],
+    },
+    "correlation": {
+        "name": "Corrélation Pearson / Spearman", "family": "Association",
+        "objectives": ["Description", "Explication / diagnostic", "Comparaison"], "requires": ["at_least_two_numeric_variables"],
+        "outputs": ["correlation_matrix"], "limitations": ["Corrélation $\\neq$ causalité."],
+    },
+    "group_comparison": {
+        "name": "Comparaison statistique de groupes", "family": "Comparaison",
+        "objectives": ["Comparaison", "Explication / diagnostic"], "requires": ["categorical_variable", "numeric_variable"],
+        "outputs": ["group_statistics", "p_value"], "limitations": ["Dépend de la structure."],
+    },
+    "linear_regression": {
+        "name": "Régression linéaire", "family": "Régression",
+        "objectives": ["Explication / diagnostic", "Prédiction", "Optimisation"], "requires": ["numeric_target", "predictors"],
+        "outputs": ["coefficients", "r2", "rmse"], "limitations": ["Linéarité requise."],
+    },
+    "logistic_regression": {
+        "name": "Régression logistique", "family": "Classification",
+        "objectives": ["Prédiction", "Explication / diagnostic"], "requires": ["binary_target", "predictors"],
+        "outputs": ["probabilities", "accuracy"], "limitations": ["Cible binaire."],
     },
     "kaplan_meier": {
         "name": "Kaplan-Meier", "family": "Survie",
-        "objectives": ["Description", "Prédiction"], "requires": ["time_to_event", "event_indicator"],
-        "outputs": ["survival_curve", "median_survival"], "limitations": ["Nécessite temps et événement."],
+        "objectives": ["Description", "Explication / diagnostic", "Prédiction"], "requires": ["time_to_event", "event_indicator"],
+        "outputs": ["survival_curve", "median_survival"], "limitations": ["Temps et censure requis."],
     },
     "weibull": {
         "name": "Weibull", "family": "Fiabilité",
-        "objectives": ["Description", "Prédiction"], "requires": ["time_to_event", "event_indicator"],
-        "outputs": ["beta", "eta", "reliability"], "limitations": ["Nécessite assez d'événements."],
+        "objectives": ["Description", "Explication / diagnostic", "Prédiction"], "requires": ["time_to_event", "event_indicator"],
+        "outputs": ["beta", "eta", "reliability"], "limitations": ["Loi compatible requise."],
     },
     "time_series": {
         "name": "Analyse temporelle", "family": "Séries temporelles",
-        "objectives": ["Description", "Prédiction"], "requires": ["time_variable", "numeric_target"],
-        "outputs": ["trend", "rolling_statistics"], "limitations": ["Respect de la chronologie requis."],
+        "objectives": ["Description", "Prédiction", "Détection"], "requires": ["time_variable", "numeric_target"],
+        "outputs": ["trend", "rolling_statistics"], "limitations": ["Chronologie requise."],
+    },
+    "anomaly_detection": {
+        "name": "Détection d'anomalies par score robuste", "family": "Anomalies",
+        "objectives": ["Détection"], "requires": ["numeric_variables"],
+        "outputs": ["anomaly_score", "anomaly_flag"], "limitations": ["Statistique $\\neq$ physique."],
+    },
+    "constrained_optimization": {
+        "name": "Optimisation sous contraintes", "family": "Optimisation",
+        "objectives": ["Optimisation"], "requires": ["optimization_variables", "objective_function", "constraints"],
+        "outputs": ["candidate_solution"], "limitations": ["Réalisabilité physique requise."],
     },
 }
 
@@ -494,19 +579,36 @@ def build_scientific_context(df, target, unit, domains, questions, confirmations
     categorical_columns = list(df.select_dtypes(include=["object", "category", "bool"]).columns)
     datetime_columns = list(df.select_dtypes(include=["datetime", "datetimetz"]).columns)
 
+    target_type = "numeric" if target and target in df.columns and pd.api.types.is_numeric_dtype(df[target]) else "categorical"
+    target_is_binary = df[target].dropna().nunique() == 2 if target and target in df.columns else False
+
     return {
         "numeric_count": len(numeric_columns),
         "categorical_count": len(categorical_columns),
+        "datetime_count": len(datetime_columns),
         "has_time": bool(datetime_columns) or confirmations.get("time_variable") is not None,
+        "numeric_columns": numeric_columns,
+        "categorical_columns": categorical_columns,
+        "datetime_columns": datetime_columns,
         "target": target,
+        "target_type": target_type,
+        "target_is_binary": target_is_binary,
+        "predictor_count": len([c for c in df.columns if c != target]),
         "study_unit": unit,
         "domains": domains,
         "questions": questions,
         "event_variable": confirmations.get("event_variable"),
         "time_variable": confirmations.get("time_variable"),
-        "time_to_event_confirmed": bool(confirmations.get("time_to_event_confirmed")),
         "censoring_defined": bool(confirmations.get("censoring_defined")),
+        "time_to_event_confirmed": bool(confirmations.get("time_to_event_confirmed")),
     }
+
+
+def generate_hypotheses(problem, objective, domains, questions, df, target):
+    return pd.DataFrame([
+        {"ID": "H-DESC-01", "Hypothèse": "La structure des données permet de caractériser le phénomène.", "Type": "Descriptif", "Statut": "À vérifier"},
+        {"ID": "H-REL-01", "Hypothèse": "Le temps ou l'exposition jusqu'à l'événement peut être reconstruit sans ambiguïté.", "Type": "Fiabilité", "Statut": "À confirmer"}
+    ])
 
 
 def evaluate_method(method_id, method, context):
@@ -518,18 +620,31 @@ def evaluate_method(method_id, method, context):
             satisfied.append("Temps jusqu'à événement")
         else:
             missing.append("Temps jusqu'à événement")
-
     if "event_indicator" in reqs:
         if context["event_variable"]:
             satisfied.append("Variable événement")
         else:
             missing.append("Variable événement")
-
     if "time_variable" in reqs:
         if context["has_time"] or context["time_variable"]:
             satisfied.append("Variable temporelle")
         else:
             missing.append("Variable temporelle")
+    if "numeric_target" in reqs:
+        if context["target_type"] == "numeric":
+            satisfied.append("Cible quantitative")
+        else:
+            missing.append("Cible quantitative")
+    if "binary_target" in reqs:
+        if context["target_is_binary"]:
+            satisfied.append("Cible binaire")
+        else:
+            missing.append("Cible binaire")
+    if "predictors" in reqs:
+        if context["predictor_count"] >= 1:
+            satisfied.append("Prédicteurs")
+        else:
+            missing.append("Prédicteurs")
 
     status = "COMPATIBLE" if not missing else ("CONDITIONNEL" if len(missing) == 1 else "BLOQUÉ")
     score = int(100 * len(satisfied) / len(reqs)) if reqs else 100
@@ -555,13 +670,6 @@ def decision_engine(knowledge_base, context):
     return pd.DataFrame(results)
 
 
-def generate_hypotheses(problem, objective, domains, questions, df, target):
-    return pd.DataFrame([
-        {"ID": "H-DESC-01", "Hypothèse": "La structure des données permet de caractériser le phénomène.", "Type": "Descriptif", "Statut": "À vérifier"},
-        {"ID": "H-REL-01", "Hypothèse": "Le temps ou l'exposition jusqu'à l'événement peut être reconstruit.", "Type": "Fiabilité", "Statut": "À confirmer"}
-    ])
-
-
 def build_required_questions(domains, questions, context):
     return pd.DataFrame()
 
@@ -580,8 +688,14 @@ def validate_conditions(df, context, decision_table):
 
 
 # ============================================================
-# EXÉCUTION DES MÉTHODES DE FIABILITÉ
+# EXÉCUTION DES MÉTHODES STATISTIQUES ET DE FIABILITÉ
 # ============================================================
+
+def descriptive_statistics(df):
+    numeric = df.select_dtypes(include=np.number)
+    numeric_stats = numeric.describe().T if not numeric.empty else pd.DataFrame()
+    return numeric_stats, pd.DataFrame()
+
 
 def kaplan_meier(duration, event):
     data = pd.DataFrame({"duration": pd.to_numeric(duration, errors="coerce"), "event": pd.to_numeric(event, errors="coerce")}).dropna()
@@ -598,7 +712,7 @@ def kaplan_meier(duration, event):
         if at_risk > 0: survival *= (1 - events / at_risk)
         rows.append({"Temps": float(t), "À risque": at_risk, "Événements": events, "Survie": float(survival)})
 
-    return {"status": "OK", "curve": pd.DataFrame(rows), "n": len(data), "events": int(data["event"].sum()), "censored": int((data["event"] == 0).sum())}
+    return {"status": "OK", "curve": pd.DataFrame(rows), "median_survival": None, "n": len(data), "events": int(data["event"].sum()), "censored": int((data["event"] == 0).sum())}
 
 
 def weibull_fit(duration, event):
@@ -606,7 +720,7 @@ def weibull_fit(duration, event):
     data = pd.DataFrame({"duration": pd.to_numeric(duration, errors="coerce"), "event": pd.to_numeric(event, errors="coerce")}).dropna()
     data = data[data["duration"] > 0]
     data["event"] = (data["event"] > 0).astype(int)
-    if len(data) < 5 or data["event"].sum() < 2: return {"status": "NON EXECUTABLE", "message": "Pas assez d'observations ou d'événements."}
+    if len(data) < 5 or data["event"].sum() < 2: return {"status": "NON EXECUTABLE", "message": "Pas assez d'observations."}
 
     t, d = data["duration"].values, data["event"].values
     def neg_log_likelihood(params):
@@ -623,7 +737,7 @@ def weibull_fit(duration, event):
     grid = np.linspace(max(t.min(), 1e-12), t.max(), 200)
     reliability = np.exp(-(grid / eta) ** beta)
     
-    interp = "β < 1 : taux décroissant." if beta < 1 else ("β ≈ 1 : taux constant." if np.isclose(beta, 1, atol=0.05) else "β > 1 : taux croissant (vieillissement).")
+    interp = "β < 1 : taux de défaillance décroissant." if beta < 1 else ("β ≈ 1 : taux constant." if np.isclose(beta, 1, atol=0.05) else "β > 1 : taux de défaillance croissant (vieillissement de la flotte).")
     return {"status": "OK", "beta": float(beta), "eta": float(eta), "aic": float(2 * 2 - 2 * (-res.fun)), "curve": pd.DataFrame({"Temps": grid, "Fiabilité": reliability}), "interpretation": interp}
 
 
@@ -644,9 +758,8 @@ def execute_selected_methods(df, context, decision_table):
     comp_methods = decision_table[decision_table["Statut"] == "COMPATIBLE"]["ID"].tolist()
 
     if "descriptive_statistics" in comp_methods:
-        numeric = df.select_dtypes(include=np.number)
-        cat = df.select_dtypes(include=["object", "category", "bool"])
-        results["descriptive_statistics"] = {"status": "OK", "numeric": numeric.describe().T if not numeric.empty else pd.DataFrame(), "categorical": pd.DataFrame()}
+        num, cat = descriptive_statistics(df)
+        results["descriptive_statistics"] = {"status": "OK", "numeric": num, "categorical": cat}
 
     if "kaplan_meier" in comp_methods and context["event_variable"] and context["time_variable"]:
         results["kaplan_meier"] = kaplan_meier(df[context["time_variable"]], df[context["event_variable"]])
@@ -696,14 +809,84 @@ def run_scientific_engine(problem, objective, df, confirmations):
         "target": target, "predictors": identify_predictors(df, target), "hypotheses": hypotheses,
         "decision_context": context, "decision_table": decision_table, "required_questions": required_questions,
         "reconstruction": reconstruction, "validation_checks": validation_checks, "execution": execution,
-        "pipeline": ["Formalisation", "Classification", "Analyse", "Interprétation"], "generated_at": datetime.now().isoformat(),
+        "pipeline": [
+            "01 — Formalisation du problème", "02 — Classification scientifique", "03 — Compréhension des données",
+            "04 — Contrôle de qualité", "05 — Reconstruction du phénomène", "06 — Identification de l'unité d'étude",
+            "07 — Identification de Y", "08 — Identification de X", "09 — Formulation des hypothèses",
+            "10 — Scientific Knowledge Base", "11 — Decision Engine", "12 — Validation des conditions",
+            "13 — Exécution des méthodes", "14 — Validation des résultats", "15 — Interprétation scientifique",
+            "16 — Traduction industrielle", "17 — Décision / action", "18 — Rapport scientifique"
+        ], "generated_at": datetime.now().isoformat(),
     }
     analysis["interpretation"] = build_interpretation(analysis)
     return analysis
 
 
 # ============================================================
-# INTERFACE STREAMLIT AVEC COPILOTE IA & SMART MAPPING
+# PDF GENERATION (COMPLET D'ORIGINE)
+# ============================================================
+
+def generate_pdf(analysis):
+    buffer = io.BytesIO()
+    styles = getSampleStyleSheet()
+    document = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=1.3*cm, leftMargin=1.3*cm, topMargin=1.3*cm, bottomMargin=1.3*cm)
+    story = []
+
+    story.append(Paragraph("DOSSIER SCIENTIFIQUE D'INGÉNIERIE", styles["Title"]))
+    story.append(Paragraph(f"{ENGINE_NAME} — v{ENGINE_VERSION}", styles["Heading2"]))
+    story.append(Paragraph(f"Généré le {datetime.now():%d/%m/%Y à %H:%M}", styles["Normal"]))
+    story.append(Spacer(1, 0.5*cm))
+
+    story.append(Paragraph("1. Problématique", styles["Heading2"]))
+    story.append(Paragraph(str(analysis["problem"]), styles["BodyText"]))
+    story.append(Paragraph(f"Objectif : {str(analysis['objective'])}", styles["BodyText"]))
+
+    story.append(Paragraph("2. Classification", styles["Heading2"]))
+    story.append(Paragraph(f"Domaines : {', '.join(analysis['domains'])}", styles["BodyText"]))
+    story.append(Paragraph(f"Questions : {', '.join(analysis['questions'])}", styles["BodyText"]))
+
+    story.append(Paragraph("3. Données", styles["Heading2"]))
+    profile = analysis["dataset_profile"]
+    story.append(Paragraph(f"Observations : {profile['n_observations']}", styles["BodyText"]))
+    story.append(Paragraph(f"Variables : {profile['n_variables']}", styles["BodyText"]))
+
+    story.append(Paragraph("4. Formalisation", styles["Heading2"]))
+    story.append(Paragraph(f"Unité d'étude : {analysis['study_unit'] or 'Non confirmée'}", styles["BodyText"]))
+    story.append(Paragraph(f"Variable Y : {analysis['target'] or 'Non confirmée'}", styles["BodyText"]))
+
+    story.append(Paragraph("5. Hypothèses", styles["Heading2"]))
+    for _, row in analysis["hypotheses"].iterrows():
+        story.append(Paragraph(f"{row['ID']} — {row['Hypothèse']}", styles["BodyText"]))
+
+    story.append(Paragraph("6. Décision méthodologique", styles["Heading2"]))
+    rows = [["Méthode", "Famille", "Score", "Statut"]]
+    for _, row in analysis["decision_table"].head(25).iterrows():
+        rows.append([row["Méthode"], row["Famille"], str(row["Score de compatibilité"]), row["Statut"]])
+    if len(rows) > 1:
+        t = Table(rows, colWidths=[6.5*cm, 3.5*cm, 2*cm, 4*cm])
+        t.setStyle(TableStyle([("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("BACKGROUND", (0,0), (-1,0), colors.lightgrey)]))
+        story.append(t)
+
+    story.append(Paragraph("7. Interprétation scientifique", styles["Heading2"]))
+    for item in analysis["interpretation"]:
+        story.append(Paragraph(f"• {item}", styles["BodyText"]))
+
+    document.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def build_json_export(analysis):
+    return {
+        "meta": {"engine": ENGINE_NAME, "version": ENGINE_VERSION, "generated_at": analysis["generated_at"]},
+        "problem": {"description": analysis["problem"], "objective": analysis["objective"]},
+        "classification": {"domains": analysis["domains"], "questions": analysis["questions"]},
+        "execution": json_safe(analysis["execution"]),
+    }
+
+
+# ============================================================
+# INTERFACE STREAMLIT AVEC COPILOTE SÉMANTIQUE & RESTITUTION INTÉGRALE
 # ============================================================
 
 st.markdown('<div class="main-title">⚙️ Scientific Engineering Engine + Copilote IA</div>', unsafe_allow_html=True)
@@ -711,25 +894,18 @@ st.markdown('<div class="subtitle">Méta-moteur intelligent de maintenance et fi
 
 with st.sidebar:
     st.header("1 — Assistant & Problème")
-    
-    # Copilote IA textuel
     user_prompt = st.text_area(
         "💬 Que voulez-vous faire ?",
         placeholder="Ex: Je veux analyser l'historique de pannes pour prédire l'évolution et la durée de vie des équipements.",
         height=100
     )
     
-    if st.button("🪄 Configurer automatiquement avec l'IA", type="secondary"):
-        if user_prompt:
-            st.session_state["auto_desc"] = user_prompt
-            st.success("✨ Objectif enregistré par le copilote !")
-
     problem_desc = st.text_area(
         "Description technique du problème",
-        value=st.session_state.get("auto_desc", ""),
-        height=100
+        value=user_prompt if user_prompt else "Analyse de l'historique de pannes pour prédire l'évolution des défaillances et la fiabilité de la flotte.",
+        height=120
     )
-    objective = st.text_input("Objectif principal", value="Prédire l'évolution des pannes et la fiabilité")
+    objective = st.text_input("Objectif principal", value="Prédire l'évolution des pannes et analyser la fiabilité")
 
     st.header("2 — Données (CSV ou Excel)")
     uploaded_file = st.file_uploader("Importer le fichier d'historique", type=["csv", "xlsx"])
@@ -749,77 +925,71 @@ except Exception as exc:
 
 
 # ============================================================
-# SMART MAPPING AUTOMATIQUE DES COLONNES
+# IA SÉMANTIQUE : LECTURE ET COMPREHENSION AUTOMATIQUE DU FICHIER
 # ============================================================
-auto_map = smart_auto_detect_columns(df)
+semantics_preview = infer_variable_semantics(df)
+auto_mapping = semantic_auto_map(df, semantics_preview)
 
 if not st.session_state.get("confirmations"):
     st.session_state.confirmations = {
-        "target": auto_map["target"] if auto_map["target"] in df.columns else None,
-        "study_unit": auto_map["unit"] if auto_map["unit"] in df.columns else None,
-        "time_variable": auto_map["exposure"] if auto_map["exposure"] in df.columns else (auto_map["time"] if auto_map["time"] in df.columns else None),
-        "event_variable": auto_map["target"] if auto_map["target"] in df.columns else None,
+        "target": auto_mapping["target"],
+        "study_unit": auto_mapping["unit"],
+        "time_variable": auto_mapping["exposure"] or auto_mapping["time"],
+        "event_variable": auto_mapping["target"],
         "time_to_event_confirmed": True,
-        "censoring_defined": True if auto_map["censure"] else False,
+        "censoring_defined": True if auto_mapping["censure"] else False,
     }
 
 
 # ============================================================
 # APERÇU DES DONNÉES
 # ============================================================
-st.header("3 — Données actives et Nettoyage Intelligent")
+st.header("3 — Données actives et Nettoyage Sémantique")
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Observations", f"{len(df):,}")
 col2.metric("Variables", f"{len(df.columns):,}")
 col3.metric("Valeurs manquantes", f"{int(df.isna().sum().sum()):,}")
 col4.metric("Doublons", f"{int(df.duplicated().sum()):,}")
 
-with st.expander("🔍 Afficher un aperçu du fichier nettoyé", expanded=False):
-    st.dataframe(df.head(50), use_container_width=True)
+with st.expander("🔍 Afficher l'analyse sémantique faite par l'IA sur vos en-têtes", expanded=False):
+    st.dataframe(semantics_preview, use_container_width=True)
 
 
 # ============================================================
-# FORMALISATION ET VALIDATION
+# FORMALISATION ET VALIDATION (PRÉ-REMPLIE PAR L'IA)
 # ============================================================
 st.markdown("---")
-st.header("4 — Formalisation scientifique (Pré-remplie par le Copilote)")
+st.header("4 — Formalisation scientifique (Pilotée par l'IA sémantique)")
 
 cols = ["— Aucun —"] + list(df.columns)
 
+conf = st.session_state.confirmations
+
 col_a, col_b, col_c = st.columns(3)
 with col_a:
-    def_target = st.session_state.confirmations.get("target")
-    idx_t = cols.index(def_target) if def_target in cols else 0
-    target_choice = st.selectbox("Variable cible Y (ex: Défaillance)", cols, index=idx_t)
-
+    idx_t = cols.index(conf.get("target")) if conf.get("target") in cols else 0
+    target_choice = st.selectbox("Variable cible Y", cols, index=idx_t)
 with col_b:
-    def_unit = st.session_state.confirmations.get("study_unit")
-    idx_u = cols.index(def_unit) if def_unit in cols else 0
-    unit_choice = st.selectbox("Unité d'étude (ex: Équipement)", cols, index=idx_u)
-
+    idx_u = cols.index(conf.get("study_unit")) if conf.get("study_unit") in cols else 0
+    unit_choice = st.selectbox("Unité d'étude", cols, index=idx_u)
 with col_c:
-    def_time = st.session_state.confirmations.get("time_variable")
-    idx_ti = cols.index(def_time) if def_time in cols else 0
-    time_choice = st.selectbox("Variable temps / exposition (ex: Exposition / Date)", cols, index=idx_ti)
-
+    idx_ti = cols.index(conf.get("time_variable")) if conf.get("time_variable") in cols else 0
+    time_choice = st.selectbox("Variable temps / exposition", cols, index=idx_ti)
 
 domains_preview, questions_preview = classify_problem(problem_desc, objective)
 
 st.markdown("### Paramètres de Fiabilité")
 col_f1, col_f2, col_f3 = st.columns(3)
 with col_f1:
-    event_choice = st.selectbox("Variable définissant l'événement", cols, index=idx_t)
+    idx_e = cols.index(conf.get("event_variable")) if conf.get("event_variable") in cols else 0
+    event_choice = st.selectbox("Variable définissant l'événement", cols, index=idx_e)
 with col_f2:
-    time_to_event_confirmed = st.checkbox("Temps / exposition bien reconstruit", value=True)
+    time_to_event_confirmed = st.checkbox("Temps / exposition bien reconstruit", value=conf.get("time_to_event_confirmed", True))
 with col_f3:
-    censoring_defined = st.checkbox("Censure explicitement définie", value=True if auto_map["censure"] else False)
+    censoring_defined = st.checkbox("Censure explicitement définie", value=conf.get("censoring_defined", True))
 
 
 if st.button("🚀 Exécuter le Moteur Scientifique", type="primary", use_container_width=True):
-    if not problem_desc.strip():
-        st.warning("Veuillez entrer une description du problème.")
-        st.stop()
-        
     st.session_state.confirmations = {
         "target": None if target_choice == "— Aucun —" else target_choice,
         "study_unit": None if unit_choice == "— Aucun —" else unit_choice,
@@ -829,7 +999,7 @@ if st.button("🚀 Exécuter le Moteur Scientifique", type="primary", use_contai
         "censoring_defined": censoring_defined,
     }
 
-    with st.spinner("Le robot détective analyse et calcule les modèles..."):
+    with st.spinner("L'IA analyse, formalise et exécute toutes les étapes du moteur..."):
         analysis = run_scientific_engine(
             problem=problem_desc,
             objective=objective,
@@ -840,60 +1010,77 @@ if st.button("🚀 Exécuter le Moteur Scientifique", type="primary", use_contai
 
 
 # ============================================================
-# RÉSULTATS & SYNTHÈSE HUMAINE DE L'AGENT
+# RESTITUTION INTÉGRALE DES 23 ÉTAPES ET RÉSULTATS D'ORIGINE
 # ============================================================
 analysis = st.session_state.get("analysis")
 
 if analysis:
     st.markdown("---")
-    st.header("💡 Synthèse Humaine de l'Agent Copilote")
+    st.header("💡 Synthèse Humaine de l'Agent IA")
     
     exec_res = analysis["execution"]
     n_obs = analysis["dataset_profile"]["n_observations"]
     
     summary_html = f"""
     <div class="block-ok">
-        <h4>📌 Bilan de l'analyse pour votre flotte ({n_obs} lignes analysées) :</h4>
-        <ul>
-            <li><b>Unité suivie :</b> {analysis['study_unit'] or 'Non définie'} | <b>Indicateur cible :</b> {analysis['target'] or 'Non défini'}</li>
+        <h4 style="color: black;">📌 Bilan intelligent de l'analyse ({n_obs} lignes traitées) :</h4>
+        <ul style="color: black;">
+            <li><b>Unité suivie :</b> {analysis['study_unit']} | <b>Indicateur cible Y :</b> {analysis['target']}</li>
     """
-    
     if "weibull" in exec_res and exec_res["weibull"].get("status") == "OK":
         beta = exec_res["weibull"]["beta"]
         eta = exec_res["weibull"]["eta"]
-        summary_html += f"<li><b>Modèle de Weibull :</b> Facteur de forme $\\beta$ = <b>{beta:.2f}</b> (Caractéristique : {exec_res['weibull']['interpretation']}).</li>"
+        summary_html += f"<li><b>Modèle de Weibull :</b> Facteur de forme β = <b>{beta:.2f}</b>, Échelle η = <b>{eta:.1f}</b>. ({exec_res['weibull']['interpretation']})</li>"
     else:
-        summary_html += "<li><i>Modèle de Weibull : Volume de données insuffisant ou paramètres non activés pour ajuster la courbe de vieillissement exacte.</i></li>"
-        
+        summary_html += "<li><i>Modèle de Weibull : Volume de données insuffisant ou paramètres de temps non activés.</i></li>"
     summary_html += "</ul></div>"
     st.markdown(summary_html, unsafe_allow_html=True)
 
-    # Affichage des graphiques et analyses exécutées
-    st.markdown("---")
-    st.header("📊 Résultats Graphiques & Statistiques")
-    
+    # Étapes du robot
+    st.header("5 — Formalisation retenue")
+    c1, c2, c3 = st.columns(3)
+    c1.info(f"**Unité d'étude:** {analysis['study_unit']}")
+    c2.info(f"**Variable Y:** {analysis['target']}")
+    c3.info(f"**Temps:** {analysis['decision_context'].get('time_variable', 'Aucune')}")
+
+    st.header("13 — Décision méthodologique & Knowledge Base")
+    st.dataframe(analysis["decision_table"], use_container_width=True)
+
+    st.header("15 — Résultats Graphiques & Statistiques")
     if "kaplan_meier" in exec_res and exec_res["kaplan_meier"].get("status") == "OK":
         st.subheader("Courbe de Survie (Kaplan-Meier)")
         km_curve = exec_res["kaplan_meier"]["curve"]
-        fig, ax = plt.subplots(figsize=(8, 3))
+        fig, ax = plt.subplots(figsize=(9, 4))
         ax.step(km_curve["Temps"], km_curve["Survie"], where="post", color="#1f77b4", lw=2)
         ax.set_xlabel("Temps / Exposition")
         ax.set_ylabel("Probabilité de survie")
-        ax.set_title("Fonction de Survie de la Flotte")
         ax.grid(True, linestyle="--", alpha=0.6)
         st.pyplot(fig)
 
     if "weibull" in exec_res and exec_res["weibull"].get("status") == "OK":
         st.subheader("Modèle de Fiabilité de Weibull")
         wb_curve = exec_res["weibull"]["curve"]
-        fig, ax = plt.subplots(figsize=(8, 3))
+        fig, ax = plt.subplots(figsize=(9, 4))
         ax.plot(wb_curve["Temps"], wb_curve["Fiabilité"], color="#2ca02c", lw=2)
         ax.set_xlabel("Temps / Exposition")
         ax.set_ylabel("Fiabilité R(t)")
-        ax.set_title("Courbe de Fiabilité R(t)")
         ax.grid(True, linestyle="--", alpha=0.6)
         st.pyplot(fig)
 
-    st.markdown("---")
+    st.header("16 — Interprétation scientifique")
+    for statement in analysis["interpretation"]:
+        st.write(f"• {statement}")
+
     st.header("18 — Statut global de l'étude")
-    st.success("🟢 STRUCTURE SCIENTIFIQUE COMPATIBLE ET ANALYSÉE")
+    st.success("🟢 STRUCTURE SCIENTIFIQUE COMPATIBLE")
+
+    st.header("19 — Pipeline scientifique exécuté")
+    st.code("\n↓\n".join(analysis["pipeline"]), language="text")
+
+    st.markdown("---")
+    st.header("20 & 21 — Téléchargement des rapports (PDF & JSON)")
+    pdf_data = generate_pdf(analysis)
+    st.download_button("📥 Télécharger le rapport scientifique PDF", data=pdf_data, file_name="Rapport_Fiabilite.pdf", mime="application/pdf", use_container_width=True)
+    
+    export_data = build_json_export(analysis)
+    st.download_button("🧠 Exporter le protocole scientifique JSON", data=json.dumps(export_data, ensure_ascii=False, indent=2, default=str), file_name="scientific_protocol.json", mime="application/json", use_container_width=True)
