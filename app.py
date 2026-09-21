@@ -1,8 +1,6 @@
 # ============================================================
-# SCIENTIFIC ENGINEERING ENGINE
-# Meta-moteur générique d'ingénierie scientifique industrielle
-#
-# VERSION 3.3 (Ergonomie simplifiée + Nettoyage & Encodage automatiques)
+# KIMPA — Méta-moteur d'ingénierie industrielle
+# VERSION 3.4 (KIMPA + Correction visuelle boîte d'aide + Robustesse)
 # ============================================================
 
 import io
@@ -45,21 +43,21 @@ warnings.filterwarnings(
 
 
 # ============================================================
-# CONFIGURATION
+# CONFIGURATION & NOM DU ROBOT : KIMPA
 # ============================================================
 
-ENGINE_NAME = "Scientific Engineering Engine"
-ENGINE_VERSION = "3.3"
+ENGINE_NAME = "KIMPA"
+ENGINE_VERSION = "3.4"
 
 st.set_page_config(
     page_title=ENGINE_NAME,
-    page_icon="⚙️",
+    page_icon="🤖",
     layout="wide",
 )
 
 
 # ============================================================
-# STYLE
+# STYLE (Correction de la couleur du texte dans la boîte d'aide)
 # ============================================================
 
 st.markdown(
@@ -77,6 +75,7 @@ st.markdown(
     }
     .help-box {
         background-color: #f0f2f6;
+        color: #31333F;
         padding: 15px;
         border-radius: 8px;
         border-left: 5px solid #ff4b4b;
@@ -126,8 +125,7 @@ def normalize_name(value):
 
 def clean_numeric_columns(df):
     """
-    FONCTION 1 : Nettoyage automatique des colonnes numériques.
-    Convertit les nombres piégés dans du texte avec des espaces (ex: '85 000') ou virgules en vrais nombres.
+    Nettoyage automatique des colonnes numériques piégées avec des espaces (ex: '85 000').
     """
     df = df.copy()
     for col in df.columns:
@@ -204,7 +202,6 @@ def load_uploaded_data(uploaded_file):
     else:
         raise ValueError("Format non supporté. Utilisez CSV ou XLSX.")
     
-    # Application du nettoyage automatique
     df = clean_numeric_columns(df)
     return df
 
@@ -225,7 +222,7 @@ def standardize_dataframe(df):
 
 
 # ============================================================
-# INFERENCE SEMANTIQUE & VOCABULAIRE ÉLARGI (SYNONYMES)
+# INFERENCE SEMANTIQUE & VOCABULAIRE ÉLARGI
 # ============================================================
 
 def infer_variable_semantics(df):
@@ -344,36 +341,19 @@ def identify_study_unit(df, semantics):
     return {"candidate": df.columns[0] if len(df.columns) > 0 else None}
 
 
-def identify_candidate_targets(df, semantics):
-    candidates = []
-    for _, row in semantics.iterrows():
-        if "cible" in str(row["Rôle inféré"]).lower() or "événement" in str(row["Rôle inféré"]).lower():
-            candidates.append({"Variable": row["Variable"], "Justification": row["Rôle inféré"], "Confiance": row["Confiance"]})
-    for col in df.columns:
-        if not any(c["Variable"] == col for c in candidates):
-            candidates.append({"Variable": col, "Justification": "Candidate générale", "Confiance": 0.4})
-    return pd.DataFrame(candidates)
-
-
 # ============================================================
 # EXÉCUTION STATISTIQUE AVEC ENCODAGE AUTOMATIQUE (One-Hot Encoding)
 # ============================================================
 
 def prepare_full_matrix(df, target):
-    """
-    FONCTION 2 : Encodage automatique des variables textuelles/catégorielles via pd.get_dummies.
-    Transforme les colonnes textuelles (Organe, Cause, etc.) en variables mathématiques exploitables.
-    """
     if target not in df.columns:
         return None
     
-    # Exclure les colonnes textuelles purement descriptives ou uniques (ID, commentaires)
     exclude_cols = [target, 'ID', 'Commentaire', 'Commentaire.1', 'Date']
     features = [c for c in df.columns if c not in exclude_cols]
     
     work = df[features + [target]].copy()
     
-    # Encodage automatique One-Hot Encoding de toutes les variables non numériques
     cat_cols = [c for c in features if not pd.api.types.is_numeric_dtype(work[c])]
     if cat_cols:
         work = pd.get_dummies(work, columns=cat_cols, drop_first=True, dtype=float)
@@ -387,10 +367,6 @@ def prepare_full_matrix(df, target):
 
 
 def logistic_regression_influence_analysis(df, target):
-    """
-    Analyse d'influence via Régression Logistique sur la matrice encodée.
-    Permet de répondre précisément à : 'Quelle variable influence le plus la hausse des pannes ?'
-    """
     if not SCIPY_AVAILABLE:
         return {"status": "NON EXECUTABLE", "message": "SciPy requis."}
     
@@ -469,7 +445,7 @@ def generate_pdf(analysis):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=1.3*cm, leftMargin=1.3*cm, topMargin=1.3*cm, bottomMargin=1.3*cm)
     styles = getSampleStyleSheet()
-    story = [Paragraph("RAPPORT D'ANALYSE INDUSTRIELLE", styles["Title"]), Spacer(1, 0.5*cm)]
+    story = [Paragraph(f"RAPPORT D'ANALYSE — {ENGINE_NAME}", styles["Title"]), Spacer(1, 0.5*cm)]
     story.append(Paragraph(f"<b>Problème :</b> {analysis['problem']}", styles["BodyText"]))
     story.append(Spacer(1, 0.3*cm))
     
@@ -487,11 +463,11 @@ def generate_pdf(analysis):
 
 
 # ============================================================
-# INTERFACE UTILISATEUR SIMPLIFIÉE
+# INTERFACE UTILISATEUR : KIMPA
 # ============================================================
 
-st.markdown('<div class="main-title">⚙️ Scientific Engineering Engine</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">Outil d\'aide à l\'analyse de données et à la résolution de problèmes industriels.</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">🤖 KIMPA</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">Votre assistant intelligent d\'analyse de données et de résolution de problèmes industriels.</div>', unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("1 — Votre Problème")
@@ -531,7 +507,7 @@ with st.expander("Voir un extrait des données"):
 
 
 # ============================================================
-# FORMALISATION CLAIRE (Avec les explications simples)
+# FORMALISATION CLAIRE (Avec le texte de la boîte d'aide corrigé)
 # ============================================================
 
 st.markdown("---")
@@ -646,7 +622,7 @@ if st.button("✅ Valider mes choix et lancer l'analyse", type="primary", use_co
 
 analysis = st.session_state.analysis
 if analysis is None and st.session_state.confirmations.get("target"):
-    with st.spinner("Nettoyage automatique et analyse statistique par le moteur..."):
+    with st.spinner("Nettoyage automatique et analyse statistique par KIMPA..."):
         analysis = run_scientific_engine(problem_desc, objective, df, st.session_state.confirmations)
         st.session_state.analysis = analysis
 
@@ -671,6 +647,6 @@ if analysis is not None:
     # Export PDF
     st.markdown("---")
     pdf_data = generate_pdf(analysis)
-    st.download_button("📥 Télécharger le rapport de synthèse (PDF)", data=pdf_data, file_name="Rapport_Industriel_Robuste.pdf", mime="application/pdf", use_container_width=True)
+    st.download_button("📥 Télécharger le rapport de synthèse (PDF)", data=pdf_data, file_name="Rapport_KIMPA.pdf", mime="application/pdf", use_container_width=True)
 else:
     st.info("👉 Veuillez remplir les choix ci-dessus et cliquer sur le bouton de validation pour afficher les résultats.")
