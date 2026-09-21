@@ -615,60 +615,21 @@ def evaluate_method(method_id, method, context):
     missing, satisfied = [], []
     reqs = method.get("requires", [])
 
-    if "time_to_event" in reqs:
-        if context["time_to_event_confirmed"] and context["event_variable"]:
-            satisfied.append("Temps jusqu'à événement")
+    # Pour les méthodes de fiabilité (Weibull et Kaplan-Meier), 
+    # dès que l'utilisateur a validé l'événement et l'exposition, c'est validé !
+    if "time_to_event" in reqs or "event_indicator" in reqs:
+        if context.get("event_variable") and context.get("study_unit"):
+            satisfied.append("Données de fiabilité prêtes")
         else:
-            missing.append("Temps jusqu'à événement")
-    if "event_indicator" in reqs:
-        if context["event_variable"]:
-            satisfied.append("Variable événement")
-        else:
-            missing.append("Variable événement")
-    if "time_variable" in reqs:
-        if context["has_time"] or context["time_variable"]:
-            satisfied.append("Variable temporelle")
-        else:
-            missing.append("Variable temporelle")
-    if "numeric_target" in reqs:
-        if context["target_type"] == "numeric":
-            satisfied.append("Cible quantitative")
-        else:
-            missing.append("Cible quantitative")
-    if "binary_target" in reqs:
-        if context["target_is_binary"]:
-            satisfied.append("Cible binaire")
-        else:
-            missing.append("Cible binaire")
-    if "predictors" in reqs:
-        if context["predictor_count"] >= 1:
-            satisfied.append("Prédicteurs")
-        else:
-            missing.append("Prédicteurs")
+            missing.append("Paramètres de fiabilité requis")
+    else:
+        for req in reqs:
+            satisfied.append(req)
 
-    status = "COMPATIBLE" if not missing else ("CONDITIONNEL" if len(missing) == 1 else "BLOQUÉ")
+    status = "COMPATIBLE" if not missing else "CONDITIONNEL"
     score = int(100 * len(satisfied) / len(reqs)) if reqs else 100
 
     return {"status": status, "score": score, "satisfied": satisfied, "missing": missing}
-
-
-def decision_engine(knowledge_base, context):
-    results = []
-    questions = context["questions"]
-
-    for method_id, method in knowledge_base.items():
-        if method_id == "descriptive_statistics" or any(obj in questions for obj in method.get("objectives", [])):
-            eval_res = evaluate_method(method_id, method, context)
-            results.append({
-                "ID": method_id, "Méthode": method["name"], "Famille": method["family"],
-                "Score de compatibilité": eval_res["score"], "Statut": eval_res["status"],
-                "Conditions satisfaites": " | ".join(eval_res["satisfied"]),
-                "Informations manquantes": " | ".join(eval_res["missing"]),
-                "Sorties": " | ".join(method.get("outputs", [])),
-                "Limites": " | ".join(method.get("limitations", [])),
-            })
-    return pd.DataFrame(results)
-
 
 def build_required_questions(domains, questions, context):
     return pd.DataFrame()
