@@ -2,7 +2,7 @@
 # SCIENTIFIC ENGINEERING ENGINE
 # Meta-moteur générique d'ingénierie scientifique industrielle
 #
-# VERSION 3.2 (Nettoyage automatique & Robustesse industrielle)
+# VERSION 3.3 (Ergonomie simplifiée + Nettoyage & Encodage automatiques)
 # ============================================================
 
 import io
@@ -49,7 +49,7 @@ warnings.filterwarnings(
 # ============================================================
 
 ENGINE_NAME = "Scientific Engineering Engine"
-ENGINE_VERSION = "3.2"
+ENGINE_VERSION = "3.3"
 
 st.set_page_config(
     page_title=ENGINE_NAME,
@@ -126,16 +126,14 @@ def normalize_name(value):
 
 def clean_numeric_columns(df):
     """
-    Nettoie automatiquement les colonnes textuelles qui contiennent des nombres
-    piégés avec des espaces (ex: '85 000') ou des virgules.
+    FONCTION 1 : Nettoyage automatique des colonnes numériques.
+    Convertit les nombres piégés dans du texte avec des espaces (ex: '85 000') ou virgules en vrais nombres.
     """
     df = df.copy()
     for col in df.columns:
         if df[col].dtype == object:
-            # Tente de supprimer les espaces insécables/normaux et remplacer les virgules
             cleaned = df[col].astype(str).str.replace(' ', '').str.replace('\xa0', '').str.replace(',', '.')
             converted = pd.to_numeric(cleaned, errors='coerce')
-            # Si plus de 50% des valeurs non-nulles sont convertibles en chiffres, on bascule la colonne en numérique
             if converted.notna().sum() >= max(1, df[col].dropna().count() * 0.5):
                 df[col] = converted
     return df
@@ -180,7 +178,7 @@ def dataframe_to_json_records(df):
 
 
 # ============================================================
-# CHARGEMENT ET STANDARDISATION
+# CHARGEMENT ET NETTOYAGE DES DONNEES
 # ============================================================
 
 def load_uploaded_data(uploaded_file):
@@ -206,7 +204,7 @@ def load_uploaded_data(uploaded_file):
     else:
         raise ValueError("Format non supporté. Utilisez CSV ou XLSX.")
     
-    # Nettoyage automatique des espaces / nombres piégés
+    # Application du nettoyage automatique
     df = clean_numeric_columns(df)
     return df
 
@@ -227,7 +225,7 @@ def standardize_dataframe(df):
 
 
 # ============================================================
-# INFERENCE SÉMANTIQUE & VOCABULAIRE ÉLARGI
+# INFERENCE SEMANTIQUE & VOCABULAIRE ÉLARGI (SYNONYMES)
 # ============================================================
 
 def infer_variable_semantics(df):
@@ -282,31 +280,31 @@ def infer_variable_semantics(df):
 def inspect_data_quality(df):
     issues = []
     if df is None or df.empty:
-        return [("CRITIQUE", "Jeu de données vide.")]
+        return [("CRITIQUE", "Le jeu de données est vide.")]
     if len(df) < 5:
-        issues.append(("CRITIQUE", "Moins de 5 observations."))
+        issues.append(("CRITIQUE", "Le jeu de données contient moins de 5 observations."))
     return issues
 
 
 DOMAIN_KEYWORDS = {
-    "Fiabilité": ["fiabilite", "panne", "defaillance", "duree de vie", "survie", "vieillissement", "usure", "failure", "reliability", "survival", "lifetime", "degradation", "casse", "rupture", "fatigue"],
-    "Maintenance": ["maintenance", "intervention", "reparation", "immobilisation", "gmao", "preventive", "corrective", "technicien", "depannage"],
-    "Qualité": ["qualite", "defaut", "non conformite", "rebuts", "rebut", "defective", "quality", "retouche", "ecart"],
-    "Production": ["production", "cadence", "trs", "oee", "rendement", "temps de cycle", "goulot", "capacite", "volume"],
-    "Énergie": ["energie", "consommation", "kwh", "puissance", "electrique", "energy", "power"],
-    "Logistique": ["logistique", "stock", "inventaire", "flux", "transport", "approvisionnement"],
-    "Sécurité": ["securite", "accident", "incident", "risque", "danger", "safety"],
-    "Process": ["process", "procede", "parametre", "reglage", "processus", "temperature", "pression", "vitesse"],
+    "Fiabilité": ["fiabilite", "panne", "defaillance", "duree de vie", "survie", "vieillissement", "usure", "failure", "reliability", "survival", "lifetime", "degradation", "casse", "rupture", "fatigue", "dysfonctionnement"],
+    "Maintenance": ["maintenance", "intervention", "reparation", "immobilisation", "gmao", "preventive", "corrective", "technicien", "depannage", "visite", "astreinte"],
+    "Qualité": ["qualite", "defaut", "non conformite", "rebuts", "rebut", "defective", "quality", "retouche", "ecart", "conformite", "controle", "bureau_controle"],
+    "Production": ["production", "cadence", "trs", "oee", "rendement", "temps de cycle", "cycle de production", "goulot", "capacite", "throughput", "volume", "fabrication", "atelier", "sortie"],
+    "Énergie": ["energie", "consommation", "kwh", "puissance", "electrique", "energy", "power", "gaz", "carburant", "kw", "facture"],
+    "Logistique": ["logistique", "stock", "inventaire", "flux", "transport", "approvisionnement", "supply chain", "entrepot", "colis", "livraison", "expedition"],
+    "Sécurité": ["securite", "accident", "incident", "risque", "danger", "safety", "presqu_accident", "blessure", "hse"],
+    "Process": ["process", "procede", "parametre", "reglage", "processus", "temperature", "pression", "vitesse", "consigne"],
 }
 
 QUESTION_KEYWORDS = {
-    "Description": ["decrire", "analyser", "repartition", "comprendre", "caracteriser", "profil", "distribution"],
-    "Explication / diagnostic": ["pourquoi", "cause", "causes", "origine", "facteur", "expliquer", "diagnostic", "influence", "associe", "association", "lie_a"],
-    "Prédiction": ["predire", "prevoir", "prediction", "anticiper", "forecast", "predict"],
-    "Comparaison": ["comparer", "comparaison", "difference", "compare", "versus", "vs"],
-    "Optimisation": ["optimiser", "optimisation", "reduire", "ameliorer", "minimiser", "maximiser", "optimize"],
-    "Détection": ["detecter", "anomalie", "anomalies", "derive", "surveillance", "detection", "monitoring"],
-    "Simulation": ["simuler", "simulation", "scenario", "what if"],
+    "Description": ["decrire", "analyser", "repartition", "comprendre", "etat des lieux", "caracteriser", "profil", "distribution", "voir", "observer", "synthese"],
+    "Explication / diagnostic": ["pourquoi", "cause", "causes", "origine", "facteur", "expliquer", "diagnostic", "influence", "associe", "association", "provenance", "lie_a"],
+    "Prédiction": ["predire", "prevoir", "prediction", "anticiper", "forecast", "predict", "futur", "estimer_prochain"],
+    "Comparaison": ["comparer", "comparaison", "difference", "différence", "compare", "entre", "versus", "vs"],
+    "Optimisation": ["optimiser", "optimisation", "reduire", "ameliorer", "minimiser", "maximiser", "optimize", "gagner", "booster", "perf"],
+    "Détection": ["detecter", "anomalie", "anomalies", "derive", "surveillance", "detection", "monitoring", "bizarre", "atypique"],
+    "Simulation": ["simuler", "simulation", "scenario", "scenarios", "what if", "et si"],
 }
 
 def classify_problem(problem, objective):
@@ -358,24 +356,24 @@ def identify_candidate_targets(df, semantics):
 
 
 # ============================================================
-# EXÉCUTION DES MÉTHODES STATISTIQUES & MACHINE LEARNING ROBUSTE
+# EXÉCUTION STATISTIQUE AVEC ENCODAGE AUTOMATIQUE (One-Hot Encoding)
 # ============================================================
 
 def prepare_full_matrix(df, target):
     """
-    Prépare la matrice de données en encodant automatiquement toutes les variables textuelles/catégorielles
-    pour permettre la régression logistique ou linéaire même sans nettoyage manuel du fichier.
+    FONCTION 2 : Encodage automatique des variables textuelles/catégorielles via pd.get_dummies.
+    Transforme les colonnes textuelles (Organe, Cause, etc.) en variables mathématiques exploitables.
     """
     if target not in df.columns:
         return None
     
-    # Exclure les colonnes textuelles purement descriptives (commentaires, ID unique)
+    # Exclure les colonnes textuelles purement descriptives ou uniques (ID, commentaires)
     exclude_cols = [target, 'ID', 'Commentaire', 'Commentaire.1', 'Date']
     features = [c for c in df.columns if c not in exclude_cols]
     
     work = df[features + [target]].copy()
     
-    # Encodage automatique (One-Hot Encoding) pour toutes les variables non numériques
+    # Encodage automatique One-Hot Encoding de toutes les variables non numériques
     cat_cols = [c for c in features if not pd.api.types.is_numeric_dtype(work[c])]
     if cat_cols:
         work = pd.get_dummies(work, columns=cat_cols, drop_first=True, dtype=float)
@@ -390,7 +388,8 @@ def prepare_full_matrix(df, target):
 
 def logistic_regression_influence_analysis(df, target):
     """
-    Exécute une régression logistique pour identifier quelles variables influencent le plus la cible (ex: pannes).
+    Analyse d'influence via Régression Logistique sur la matrice encodée.
+    Permet de répondre précisément à : 'Quelle variable influence le plus la hausse des pannes ?'
     """
     if not SCIPY_AVAILABLE:
         return {"status": "NON EXECUTABLE", "message": "SciPy requis."}
@@ -405,7 +404,6 @@ def logistic_regression_influence_analysis(df, target):
     if len(unique_y) < 2:
         return {"status": "NON EXECUTABLE", "message": "La cible Y doit avoir au moins 2 valeurs différentes (ex: 0 et 1)."}
         
-    # Si binaire, s'assurer que c'est 0 ou 1
     y_bin = (y == unique_y[1]).astype(float)
     
     from sklearn.linear_model import LogisticRegression
@@ -413,7 +411,6 @@ def logistic_regression_influence_analysis(df, target):
         model = LogisticRegression(max_iter=1000)
         model.fit(X, y_bin)
         
-        # Coefficients et importance
         coefs = pd.DataFrame({
             "Facteur / Variable": columns,
             "Coefficient": model.coef_[0],
@@ -444,12 +441,10 @@ def run_scientific_engine(problem, objective, df, confirmations):
 
     execution = {}
     if target:
-        # Lancer l'analyse d'influence des facteurs sur la cible Y
         res_log = logistic_regression_influence_analysis(df, target)
         if res_log["status"] == "OK":
             execution["logistic_regression"] = res_log
             
-    # Statistiques descriptives de base
     numeric_stats = df.select_dtypes(include=np.number).describe().T if not df.select_dtypes(include=np.number).empty else pd.DataFrame()
     execution["descriptive_statistics"] = {"status": "OK", "numeric": numeric_stats}
 
@@ -461,8 +456,9 @@ def run_scientific_engine(problem, objective, df, confirmations):
         "quality_issues": quality_issues, "study_unit": study_unit,
         "target": target, "execution": execution,
         "interpretation": [
-            "Analyse robuste effectuée avec nettoyage et encodage automatique des données.",
-            "Les facteurs ayant le plus fort impact sur la cible ont été extraits via modélisation statistique."
+            "Nettoyage automatique des espaces et formats numériques appliqué avec succès.",
+            "Encodage automatique (One-Hot Encoding) des variables textuelles réalisé pour l'analyse d'impact.",
+            "Les facteurs ayant le plus fort impact sur la variable cible ont été extraits et classés par ordre d'importance."
         ],
         "generated_at": datetime.now().isoformat(),
     }
@@ -473,7 +469,7 @@ def generate_pdf(analysis):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=1.3*cm, leftMargin=1.3*cm, topMargin=1.3*cm, bottomMargin=1.3*cm)
     styles = getSampleStyleSheet()
-    story = [Paragraph("RAPPORT D'ANALYSE INDUSTRIELLE ROBUSTE", styles["Title"]), Spacer(1, 0.5*cm)]
+    story = [Paragraph("RAPPORT D'ANALYSE INDUSTRIELLE", styles["Title"]), Spacer(1, 0.5*cm)]
     story.append(Paragraph(f"<b>Problème :</b> {analysis['problem']}", styles["BodyText"]))
     story.append(Spacer(1, 0.3*cm))
     
@@ -491,27 +487,27 @@ def generate_pdf(analysis):
 
 
 # ============================================================
-# INTERFACE UTILISATEUR STREAMLIT
+# INTERFACE UTILISATEUR SIMPLIFIÉE
 # ============================================================
 
-st.markdown('<div class="main-title">⚙️ Scientific Engineering Engine (v3.2)</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">Méta-moteur avec nettoyage automatique intelligent des données industrielles.</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">⚙️ Scientific Engineering Engine</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">Outil d\'aide à l\'analyse de données et à la résolution de problèmes industriels.</div>', unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("1 — Votre Problème")
     problem_desc = st.text_area(
         "Décrivez votre situation ou votre problème",
         height=150,
-        placeholder="Ex: Quelle variable influence le plus la hausse des pannes..."
+        placeholder="Ex: Nous avons une hausse des pannes sur la ligne 3 et nous voulons comprendre quelles variables influencent ces arrêts..."
     )
-    objective = st.text_input("Objectif principal", placeholder="Ex: Expliquer, prédire...")
+    objective = st.text_input("Objectif principal", placeholder="Ex: Expliquer, prédire, optimiser...")
     
     st.header("2 — Vos Données")
     uploaded_file = st.file_uploader("Importer votre fichier (CSV ou Excel)", type=["csv", "xlsx"])
 
 
 if uploaded_file is None:
-    st.info("👋 Veuillez importer votre fichier de données dans le volet de gauche pour démarrer.")
+    st.info("👋 Bienvenue ! Veuillez importer un fichier de données dans le volet de gauche pour démarrer.")
     st.stop()
 
 try:
@@ -519,13 +515,14 @@ try:
     df = standardize_dataframe(df)
     st.session_state.df = df
 except Exception as exc:
-    st.error(f"Erreur de lecture ou de nettoyage du fichier : {exc}")
+    st.error(f"Erreur de lecture du fichier : {exc}")
     st.stop()
 
-st.header("3 — Aperçu des données (Nettoyées automatiquement)")
+# Aperçu rapide
+st.header("3 — Aperçu de vos données (Nettoyées automatiquement)")
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("Lignes", f"{len(df):,}")
-c2.metric("Colonnes", f"{len(df.columns):,}")
+c1.metric("Lignes (observations)", f"{len(df):,}")
+c2.metric("Colonnes (variables)", f"{len(df.columns):,}")
 c3.metric("Valeurs manquantes", f"{int(df.isna().sum().sum()):,}")
 c4.metric("Doublons", f"{int(df.duplicated().sum()):,}")
 
@@ -533,31 +530,126 @@ with st.expander("Voir un extrait des données"):
     st.dataframe(df.head(10), use_container_width=True)
 
 
+# ============================================================
+# FORMALISATION CLAIRE (Avec les explications simples)
+# ============================================================
+
 st.markdown("---")
 st.header("4 — Paramétrage simple de l'étude")
 
+st.markdown(
+    """
+    <div class="help-box">
+    <b>💡 Guide pour remplir ce formulaire (Exemple fil rouge) :</b><br>
+    Imaginons que vous travaillez dans une usine et que votre tableau de bord liste des <b>produits fabriqués heure par heure</b>, avec leur température de cuisson, la machine utilisée, et s'ils sont conformes ou non.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
 col_f1, col_f2 = st.columns(2)
+
 with col_f1:
+    st.markdown("### 🎯 Ce que vous cherchez à étudier (La Cible Y)")
+    st.markdown(
+        """
+        * **Explication simple :** C'est **la question principale** ou le résultat que vous voulez expliquer, prédire ou surveiller.
+        * **Exemple :** Si vous voulez savoir pourquoi certains produits ont un défaut, la cible Y est la colonne **« Statut_Conformité »** ou **« Rebut (Oui/Non) »**.
+        """
+    )
     target_options = ["— Aucune sélection —"] + list(df.columns)
-    target_choice = st.selectbox("Sélectionnez votre variable Cible Y (ex: Défaillance / Panne)", target_options)
+    target_default = target_options.index(st.session_state.confirmations["target"]) if st.session_state.confirmations.get("target") in df.columns else 0
+    target_choice = st.selectbox("Sélectionnez votre variable Cible (Y)", target_options, index=target_default)
 
 with col_f2:
+    st.markdown("### 🏷️ L'élément unique observé (Unité d'étude)")
+    st.markdown(
+        """
+        * **Explication simple :** C'est ce que représente **une seule ligne** de votre tableau (une pièce, une machine, un client, un jour...).
+        * **Exemple :** Si chaque ligne de votre fichier correspond à un produit unique qui passe sur la ligne, l'unité d'étude est l'identifiant du produit (**« ID_Piece »** ou **« Numero_Serie »**).
+        """
+    )
     unit_options = ["— Aucune sélection —"] + list(df.columns)
-    unit_choice = st.selectbox("Sélectionnez l'élément unique / Unité (ex: Équipement / ID)", unit_options)
+    unit_default = unit_options.index(st.session_state.confirmations["study_unit"]) if st.session_state.confirmations.get("study_unit") in df.columns else 0
+    unit_choice = st.selectbox("Sélectionnez l'élément unique (Unité d'étude)", unit_options, index=unit_default)
+
+# Variable temporelle
+datetime_candidates = [col for col in df.columns if pd.api.types.is_datetime64_any_dtype(df[col]) or contains_any(col, ["date", "time", "timestamp", "heure", "jour"])]
+time_options = ["— Aucune —"] + datetime_candidates
+time_default = time_options.index(st.session_state.confirmations["time_variable"]) if st.session_state.confirmations.get("time_variable") in datetime_candidates else 0
+
+st.markdown("### ⏰ Suivi dans le temps")
+time_choice = st.selectbox("Votre tableau comporte-t-il une date ou une heure de suivi ?", time_options, index=time_default)
 
 
-if st.button("🚀 Lancer l'analyse robuste", type="primary", use_container_width=True):
-    confirmations = {
+# ============================================================
+# FORMULAIRES CONDITIONNELS SIMPLIFIÉS
+# ============================================================
+
+domains_preview, questions_preview = classify_problem(problem_desc, objective)
+
+event_choice = "— Aucun —"
+time_to_event_confirmed = False
+censoring_defined = False
+selected_controls = []
+objective_function = ""
+constraints = ""
+normal_behavior_defined = False
+
+if "Fiabilité" in domains_preview:
+    st.markdown("---")
+    st.subheader("🛠️ Option : Suivi des pannes / de la maintenance")
+    st.info("Vous avez mentionné des notions de pannes ou de durée de vie. Précisez les éléments suivants pour affiner l'analyse de fiabilité :")
+    
+    event_options = ["— Aucun —"] + list(df.columns)
+    event_choice = st.selectbox("Quelle colonne indique qu'une panne ou un arrêt critique s'est produit ?", event_options)
+    time_to_event_confirmed = st.checkbox("Le temps de fonctionnement cumulé avant la panne est bien calculé dans les données.")
+    censoring_defined = st.checkbox("Les équipements qui n'ont pas encore eu de panne sont bien signalés comme 'actifs / non cassés'.")
+
+if "Optimisation" in questions_preview:
+    st.markdown("---")
+    st.subheader("📈 Option : Paramètres d'optimisation")
+    st.info("Vous cherchez à améliorer ou optimiser un processus. Dites-nous quels leviers vous pouvez modifier :")
+    
+    controllable_candidates = list(df.select_dtypes(include=np.number).columns)
+    selected_controls = st.multiselect("Quelles colonnes pouvez-vous modifier/régler directement (ex: température, vitesse) ?", controllable_candidates)
+    objective_function = st.text_input("Que voulez-vous faire ?", placeholder="Ex: Minimiser les défauts ou maximiser la production")
+    constraints = st.text_input("Y a-t-il des limites à respecter ?", placeholder="Ex: Ne pas dépasser 120°C")
+
+if "Détection" in questions_preview:
+    st.markdown("---")
+    st.subheader("🔍 Option : Détection d'anomalies")
+    normal_behavior_defined = st.checkbox("Disposez-vous d'une période de référence où le système fonctionnait normalement ?")
+
+
+# Validation du formulaire
+if st.button("✅ Valider mes choix et lancer l'analyse", type="primary", use_container_width=True):
+    st.session_state.confirmations = {
         "target": None if target_choice == "— Aucune sélection —" else target_choice,
         "study_unit": None if unit_choice == "— Aucune sélection —" else unit_choice,
+        "time_variable": None if time_choice == "— Aucune —" else time_choice,
+        "event_variable": None if event_choice == "— Aucun —" else event_choice,
+        "time_to_event_confirmed": time_to_event_confirmed,
+        "censoring_defined": censoring_defined,
+        "controllable_variables": selected_controls,
+        "objective_function": objective_function,
+        "constraints": constraints,
+        "normal_behavior_defined": normal_behavior_defined,
     }
-    with st.spinner("Nettoyage intelligent et exécution des modèles statistiques en cours..."):
-        analysis = run_scientific_engine(problem_desc, objective, df, confirmations)
-        st.session_state.analysis = analysis
-    st.success("Analyse terminée avec succès !")
+    st.success("Paramètres enregistrés avec succès ! L'analyse se lance...")
+    st.rerun()
 
+
+# ============================================================
+# EXÉCUTION & AFFICHAGE DES RÉSULTATS
+# ============================================================
 
 analysis = st.session_state.analysis
+if analysis is None and st.session_state.confirmations.get("target"):
+    with st.spinner("Nettoyage automatique et analyse statistique par le moteur..."):
+        analysis = run_scientific_engine(problem_desc, objective, df, st.session_state.confirmations)
+        st.session_state.analysis = analysis
+
 if analysis is not None:
     st.markdown("---")
     st.header("📊 Résultats de l'analyse d'influence")
@@ -568,10 +660,17 @@ if analysis is not None:
         
         st.subheader("Classement des variables qui influencent le plus la cible :")
         st.dataframe(reg["coefficients"], use_container_width=True)
-        st.info("💡 Un coefficient positif pousse vers la hausse de la panne, tandis qu'un coefficient négatif (comme la maintenance préventive ou la censure) réduit ou protège de la panne.")
+        st.info("💡 Un coefficient positif pousse vers la hausse de la panne, tandis qu'un coefficient négatif réduit ou protège de la panne.")
     else:
         st.warning("Veuillez sélectionner une variable cible valide pour lancer l'analyse d'influence.")
 
+    st.subheader("Interprétations clés")
+    for statement in analysis["interpretation"]:
+        st.write(f"• {statement}")
+
+    # Export PDF
     st.markdown("---")
     pdf_data = generate_pdf(analysis)
-    st.download_button("📥 Télécharger le rapport d'analyse (PDF)", data=pdf_data, file_name="Rapport_Analyse_Robuste.pdf", mime="application/pdf", use_container_width=True)
+    st.download_button("📥 Télécharger le rapport de synthèse (PDF)", data=pdf_data, file_name="Rapport_Industriel_Robuste.pdf", mime="application/pdf", use_container_width=True)
+else:
+    st.info("👉 Veuillez remplir les choix ci-dessus et cliquer sur le bouton de validation pour afficher les résultats.")
